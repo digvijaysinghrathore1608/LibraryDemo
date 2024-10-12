@@ -1,3 +1,7 @@
+import groovy.json.JsonSlurper
+import java.net.HttpURLConnection
+import java.net.URL
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -59,5 +63,45 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
 //    implementation(project(":mylibrary"))
-//    implementation ("com.github.digvijaysinghrathore1608:LibraryDemo:1.0.0")
+    implementation ("com.github.digvijaysinghrathore1608:LibraryDemo:1.0.1")
 }
+
+tasks.register("checkForLibraryUpdate") {
+    doLast {
+        val apiUrl = "https://api.github.com/repos/digvijaysinghrathore1608/LibraryDemo/releases"
+        val latestVersion: String
+
+        try {
+            val connection = URL(apiUrl).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connect()
+
+            val response = connection.inputStream.bufferedReader().readText()
+            val releases = JsonSlurper().parseText(response) as List<Map<String, Any>>
+
+            latestVersion = if (releases.isNotEmpty()) {
+                releases[0]["tag_name"] as String // Get the latest version
+            } else {
+                throw Exception("No releases found")
+            }
+
+            // Update build.gradle.kts automatically
+            val buildGradleFile = file("${projectDir}/build.gradle.kts")
+            val lines = buildGradleFile.readLines().toMutableList()
+
+            for (i in lines.indices) {
+                if (lines[i].contains("implementation(\"com.github.digvijaysinghrathore1608:LibraryDemo:")) {
+                    lines[i] = "    implementation(\"com.github.digvijaysinghrathore1608:LibraryDemo:$latestVersion\")"
+                    break
+                }
+            }
+
+            buildGradleFile.writeText(lines.joinToString("\n"))
+            println("Updated to version: $latestVersion")
+        } catch (e: Exception) {
+            println("Error checking for updates: ${e.message}")
+        }
+    }
+}
+
+
